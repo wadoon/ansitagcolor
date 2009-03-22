@@ -1,0 +1,9 @@
+from distutils.core import setup
+
+setup( 
+  name = "ansi", 
+  version = "0.1", 
+  author = "Alexander Weigl", 
+  author_email = "areku@web.de", 
+  py_modules = ["ansi","TerminalController"] 
+)

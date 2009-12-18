@@ -105,7 +105,7 @@ class style(object):
 class AnsiTerminal:
     """
     A AnsiTerminal is a wrapper above a handle for writing ansi sequences to terminals.
-    With the attribute enabled you can block all ansi sequences for printout
+    With the attribute @enabled@ you can block all ansi sequences for printout
     """            
     def __init__(self,handle=sys.stdout, enabled = True):
         """
@@ -119,10 +119,6 @@ class AnsiTerminal:
 
     def __lshift__(self, obj):
         self.output.write(obj)
-        
-        
-        
-
         
     def set_raw(self, *args):
         """

@@ -4,9 +4,17 @@ python:
   - "2.7"
   - "3.2"
   - "3.3"
+  - "pypy"
 # command to install dependencies
 install:
+  - "pip install coveralls"
   - "pip install -r requirements.txt"
+  - "pip install ."
   - "pip install nose"
+
 # command to run tests
-script: nosetests
+script:
+  nosetests  --with-coverage --cover-package=ansi
+
+after_success:
+  coveralls

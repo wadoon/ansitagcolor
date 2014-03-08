@@ -126,7 +126,9 @@ class TerminalController:
                 setattr(self, 'BG_'+color, curses.tparm(set_bg_ansi, i) or '')
 
     def size(self):
-        try: import curses
+        try:
+            import curses
+            curses.setupterm()
         except: return (0,0)
         return ( curses.tigetnum('cols'),  curses.tigetnum('lines') )
 

@@ -1,16 +1,37 @@
 #/usr/bin/python 
+from __future__ import print_function
+import sys
 
 from enum import Enum
+import re
 
-from pyparsing import *
 
-
-# program info
 __author__ = "Alexander Weigl <alex953@gmail.com>"
 __version__ = "0.0.1"
 __date__ = "25. Jul. 2006"
 
-class Style(Enum):
+#region constants
+class Colors16Table(Enum):
+    DEFAULT = 39
+    Black = 30
+    Red = 31
+    Green = 32
+    Yellow = 33
+    Blue = 34
+    Magenta = 35
+    Cyan = 36
+    Light_Gray = 37
+    Dark_Gray = 90
+    Light_Red = 91
+    Light_Green = 92
+    Light_Yellow = 93
+    Light_Blue = 94
+    Light_Cyan = 96
+    White = 97
+    Light_Magenta = 95
+
+
+class Option(Enum):
     BOLD_ON = 1
     DIM_ON = 2
     UNDERLINE_ON = 4
@@ -25,22 +46,70 @@ class Style(Enum):
     REVERSE_OFF = 27
     HIDDEN_OFF = 28
 
+
 CSI = "\033["
 
+#endregion
+
+def default_tags():
+    d = {
+        'y': style(Colors16Table.Yellow),
+        'r': style(Colors16Table.Red),
+        'g': style(Colors16Table.Green),
+        'b': style(Colors16Table.Blue),
+        'm': style(Colors16Table.Magenta),
+        'c': style(Colors16Table.Cyan),
+
+        'Y': style(background=Colors16Table.Yellow),
+        'R': style(background=Colors16Table.Red),
+        'G': style(background=Colors16Table.Green),
+        'B': style(background=Colors16Table.Blue),
+        'M': style(background=Colors16Table.Magenta),
+        'C': style(background=Colors16Table.Cyan),
+
+        'ly': style(Colors16Table.Light_Yellow),
+        'lr': style(Colors16Table.Light_Red),
+        'lg': style(Colors16Table.Light_Green),
+        'lb': style(Colors16Table.Light_Blue),
+        'lm': style(Colors16Table.Light_Magenta),
+        'lc': style(Colors16Table.Light_Cyan),
+
+        'LY': style(background=Colors16Table.Light_Yellow),
+        'LR': style(background=Colors16Table.Light_Red),
+        'LG': style(background=Colors16Table.Light_Green),
+        'LB': style(background=Colors16Table.Light_Blue),
+        'LM': style(background=Colors16Table.Light_Magenta),
+        'LC': style(background=Colors16Table.Light_Cyan),
+
+        'blink': style(option=Option.BLINK_ON),
+        'ul': style(option=Option.UNDERLINE_ON)
+    }
+
+    for i in range(256):
+        d["fg%d" % i] = style(foreground=i)
+        d["bg%d" % i] = style(background=i)
+
+    return d
+
+
 class style(object):
-    def __init__(self, foreground = None, background = None, style = set()):
+    def __init__(self, foreground=None, background=None, option=set()):
         self.foreground = foreground
         self.background = background
-        self.style = style
+
+        if hasattr(option, "__iter__"):
+            self.option = option
+        else:
+            self.option = [option]
 
     def __copy(self):
-        return style(self.foreground, self.background, self.style)
+        return style(self.foreground, self.background, self.option)
 
     def __str__(self):
         return "<style %s>" % str(iter(self))
 
     def __iter__(self):
-        return (self.foreground, self.background, self.style)
+        return (self.foreground, self.background, self.option)
 
     def extends(self, other):
         return self + other
@@ -52,12 +121,36 @@ class style(object):
             new.foreground = other.foreground
 
         if other.background:
-            new.background  = other.background
+            new.background = other.background
 
         if other.style:
-            new.style = other.style
+            new.option = other.style
 
         return new
+
+
+    @property
+    def fgcode(self):
+        if self.foreground:
+            if isinstance(self.foreground, Colors16Table):
+                return "%dm" % self.foreground.value
+            else:
+                return "38;5;%dm" % self.foreground
+        return None
+
+    @property
+    def bgcode(self):
+        if self.background:
+            if isinstance(self.background, Colors16Table):
+                return "%dm" % self.background.value + 10
+            else:
+                return "48;5;%dm" % self.background
+        return None
+
+    @property
+    def opcode(self):
+        if self.option:
+            return ";".join(map(lambda x: str(x.value), self.option)) + "m"
 
 
 class term:
@@ -65,6 +158,7 @@ class term:
     A AnsiTerminal is a wrapper above a handle for writing ansi sequences to terminals.
     With the attribute @enabled@ you can block all ansi sequences for printout
     """
+
     def __init__(self, handle=sys.stdout, enabled=True):
         """
         Create a new AnsiTerminal for the file/console handle. 
@@ -73,7 +167,11 @@ class term:
         self.output = handle
         self.enabled = enabled  # and handle.isatty():
 
-        self.register = dict()
+        self._register = default_tags()
+        self.startenv = r"{"
+        self.endenv = r"}"
+
+        self.normal_style = style(option=Option.RESET)
 
     def __lshift__(self, obj):
         self.output.write(obj)
@@ -95,68 +193,79 @@ class term:
         self.output.write(CSI)
         self.output.write(suffix)
 
-    def set_blink(self, cmd='off'):
-        """
-        sets the blinking of the text in the terminal
-        values for cmd: 'off' , ('on','slow), 'rapid'
- 
-        """
-        cmd = cmd.lower()
-        if cmd == 'on' or cmd == 'slow':
-            blink = ansi_blink_slow
-        elif cmd == 'rapid':
-            blink = ansi_blink_rapid
+    def register(self, tag, style):
+        self._register[tag] = style
+
+    def get_normal(self):
+        return self.normal_style
+
+    def activate_style(self, style):
+        if style.foreground:
+            self._write_raw(style.fgcode)
+
+        if style.background:
+            self._write_raw(style.bgcode)
+
+        if style.option:
+            self._write_raw(style.opcode)
+
+    def get_style(self, tag):
+        try:
+            return self._register[tag]
+        except KeyError as e:
+            return self.get_normal()
+
+    def cprint(self, string):
+        stack = []
+
+        def pop():
+            try:
+                stack.pop()
+                self.activate_style(self.get_normal())
+                peak()
+            except:
+                pass
+
+        def push():
+            tag = ""
+            for tag in itokens:
+                if "" != tag.strip():
+                    break
+            next(itokens)  # consume next empty step
+            stack.append(tag)
+            peak()
+
+        def peak():
+            try:
+                t = stack[-1]
+                self.activate_style(self.get_style(t))
+            except KeyError as e:
+                pass
+
+        tokens = re.split(r'(\w+|[}{])', string)
+        itokens = iter(tokens)
+        for t in itokens:
+            if t == '':
+                continue
+            elif t == self.startenv:
+                push()
+            elif t == self.endenv:
+                pop()
+            else:
+                self.output.write(t)
         else:
-            blink = ansi_blink_off
-        self.set_raw(blink)
+            pass  #print(string)
 
-    def set_bold(self, cmd='off'):
-        """
-        sets a bold font
-        values for cmd: 'on', 'off'
-        """
-        cmd = cmd.lower()
-        if cmd == 'off':
-            self.set_raw(ansi_intensity_normal)
-        else:
-            self.set_raw(ansi_bold)
 
-    def set_underline(self, cmd='off'):
-        """
-        sets the underlining of the text
-        values for cmd: ('on','single'), 'double' , 'off'
-        """
-        cmd = cmd.lower()
-        if cmd == 'on' or cmd == 'single':
-            raw = ansi_underline
-        elif cmd == 'double':
-            raw = ansi_twice_underline
-        else:
-            raw = ansi_no_underline
-        self.set_raw(raw)
+    def printr(self, *objects, sep=' ', end='\n'):
+        for o in objects:
+            self.cprint(str(o))
+            self.output.write(sep)
+        self.output.write(end)
 
-    def set_normal_color(self, fg, bg):
-        """
-        setting the terminal color using the _normal_color (30,40)
-        """
-        self.__set_color(fg, bg)
 
-    def set_intensity_color(self, fg, bg):
-        """
-        setting the terminal color using the _intensity_color (90,100)
-        """
-        self.__set_color(fg, bg, _intensity_color)
-
-    def __get_color(self, name):
-        return ansi_colors[abbr_color_name[name]]
-
-    def __set_color(self, fg, bg, cscheme=_normal_color):
-        fg_v = None if fg is None else self.__get_color(fg) + cscheme[0]
-        bg_v = None if bg is None else self.__get_color(bg) + cscheme[1]
-        self.set_raw(fg_v, bg_v)
-
-    def reset(self):
-        self.set_raw(ansi_reset)
+    def flag(self, option):
+        self.set_raw(option.value)
 
     def scroll_page_up(self, page=1):
         """
@@ -191,102 +300,16 @@ class term:
     def moveto(self, row, col):
         self._write_raw(row + ';' + col + 'f')
 
-    def _parse(self, command):
-        #print '__parse: ' , command
-        command = statement.parseString(command)[1:-1]
-        #print command
-        if command[0] == '+' or command[0] == '-':
-            self.__set_switch(state=command[0], switch=command[1])
-        else:
-            argument = command[0]
-            values = []
-            for v in range(2, len(command), 2):
-                values += (command[v],)
-            self.__set_argument(argument, values)
-
-    def __set_argument(self, arg, values):
-        #print arg, '->', values
-        if arg == 'c':
-            self.set_color(values[0], values[1])
-        elif arg == 'm':
-            self.moveto(values[0], values[1])
-        elif arg == 'r':
-            self.reset()
-        else:
-            if __debug__:
-                self.output.write('<E: not well known switch: %s>' % arg)
-
-    def __set_switch(self, switch, state):
-        state = 'on' if state == '+' else 'off'
-        if switch == 'b':
-            self.set_blink(state)
-        elif switch == 'u':
-            self.set_underline(state)
-        else:
-            if __debug__:
-                self.output.write('<E: not well known switch: %s>' % switch)
-
-#input parsing
-__grammar = """
- # root
-   statement :== '[' innerStatement  ']'
-   innerStatement :==   single_stmt 
-                      | param_stmt
-                      | onoff_stmt;
-   
-   single_stmt :== 'r'; #only reset
-   param_stmt  :== 'c:' integer ',' integer; # nur color
-   onoff_stmt  :== 'b'|'u' '+'|'-'
- #ziffern:
-   integer :== '' | 0..9;
-"""
-
-letter = Or(Word(alphas + nums, max=10) | Literal('_').setParseAction(
-    lambda s, p, t: [None]
-))
-
-arglist = letter + ZeroOrMore(Literal(',') + letter)
-params_cmd = letter + Optional(Literal(':') + arglist)
-
-switch_cmd = Or(Literal('+') | '-')
-onoff_cmd = switch_cmd + letter
-
-inner_stmt = Or(onoff_cmd | params_cmd)
-statement = Literal('[') + inner_stmt + Literal(']')
-
-onoff_cmd.setResultsName('on_off')
-params_cmd.setResultsName('param')
-
-__printing__ = True
-
-stdout = AnsiTerminal(sys.stdout)
-stderr = AnsiTerminal(sys.stderr)
-
-
-def output(text, terminal=stdout, auto_reset=False):
-    while len(text) > 0:
-        start, end = text.find('['), text.find(']')
-
-        #no more tags to translated, you can print the rest
-        if start == -1 or end == -1:
-            print text
-            break
-
-        printable = text[0:start]
-        command = text[start:end + 1]
-        text = text[end + 1:]
-
-        print printable,
-        del printable
-
-        if __printing__: terminal._parse(command)
-    if auto_reset:
-        terminal.reset()
-
 
 if __name__ == '__main__':
-    import sys
+    t = term()
+    t.register('y', style(Colors16Table.Yellow))
+    t.register('m', style(Colors16Table.Magenta))
+    t.register('hc', style(252, option=Option.UNDERLINE_ON))
+    t.register('hcbg', style(252, 100))
+    t.register('blink', style(option=Option.BLINK_ON))
 
-    output(' '.join(sys.argv[1:]));
+    print = t.printr
 
-
+    print("{y abc {m hallo} welt} {blink B!} {hc abc} {hcbg adf}")
+    print()

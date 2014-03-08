@@ -257,7 +257,11 @@ class term:
             pass  #print(string)
 
 
-    def printr(self, *objects, sep=' ', end='\n'):
+    #def printr(self, *objects, sep=' ', end='\n'):
+    def printr(self, *objects):
+        sep = ' '
+        end = "\n"
+
         for o in objects:
             self.cprint(str(o))
             self.output.write(sep)

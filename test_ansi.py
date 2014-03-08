@@ -1,5 +1,7 @@
 __author__ = 'Alexander Weigl'
 
+import ansi
+
 from nose import *
 from unittest import TestCase
 

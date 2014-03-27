@@ -31,3 +31,7 @@ t.register("error", style( foreground = ansi.Color16Table.White, background = an
 
 print("{error Error Message!}")
 ```
+
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/areku/ansitagcolor/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+

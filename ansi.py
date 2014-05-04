@@ -1,9 +1,9 @@
-#/usr/bin/python 
+# /usr/bin/python
 from __future__ import print_function
 import sys
+import re
 
 from enum import Enum
-import re
 
 
 __author__ = "Alexander Weigl <alex953@gmail.com>"
@@ -11,7 +11,7 @@ __version__ = "0.0.1"
 __date__ = "25. Jul. 2006"
 
 #region constants
-class Colors16Table(Enum):
+class Color16Table(Enum):
     DEFAULT = 39
     Black = 30
     Red = 31
@@ -53,33 +53,33 @@ CSI = "\033["
 
 def default_tags():
     d = {
-        'y': style(Colors16Table.Yellow),
-        'r': style(Colors16Table.Red),
-        'g': style(Colors16Table.Green),
-        'b': style(Colors16Table.Blue),
-        'm': style(Colors16Table.Magenta),
-        'c': style(Colors16Table.Cyan),
+        'y': style(Color16Table.Yellow),
+        'r': style(Color16Table.Red),
+        'g': style(Color16Table.Green),
+        'b': style(Color16Table.Blue),
+        'm': style(Color16Table.Magenta),
+        'c': style(Color16Table.Cyan),
 
-        'Y': style(background=Colors16Table.Yellow),
-        'R': style(background=Colors16Table.Red),
-        'G': style(background=Colors16Table.Green),
-        'B': style(background=Colors16Table.Blue),
-        'M': style(background=Colors16Table.Magenta),
-        'C': style(background=Colors16Table.Cyan),
+        'Y': style(background=Color16Table.Yellow),
+        'R': style(background=Color16Table.Red),
+        'G': style(background=Color16Table.Green),
+        'B': style(background=Color16Table.Blue),
+        'M': style(background=Color16Table.Magenta),
+        'C': style(background=Color16Table.Cyan),
 
-        'ly': style(Colors16Table.Light_Yellow),
-        'lr': style(Colors16Table.Light_Red),
-        'lg': style(Colors16Table.Light_Green),
-        'lb': style(Colors16Table.Light_Blue),
-        'lm': style(Colors16Table.Light_Magenta),
-        'lc': style(Colors16Table.Light_Cyan),
+        'ly': style(Color16Table.Light_Yellow),
+        'lr': style(Color16Table.Light_Red),
+        'lg': style(Color16Table.Light_Green),
+        'lb': style(Color16Table.Light_Blue),
+        'lm': style(Color16Table.Light_Magenta),
+        'lc': style(Color16Table.Light_Cyan),
 
-        'LY': style(background=Colors16Table.Light_Yellow),
-        'LR': style(background=Colors16Table.Light_Red),
-        'LG': style(background=Colors16Table.Light_Green),
-        'LB': style(background=Colors16Table.Light_Blue),
-        'LM': style(background=Colors16Table.Light_Magenta),
-        'LC': style(background=Colors16Table.Light_Cyan),
+        'LY': style(background=Color16Table.Light_Yellow),
+        'LR': style(background=Color16Table.Light_Red),
+        'LG': style(background=Color16Table.Light_Green),
+        'LB': style(background=Color16Table.Light_Blue),
+        'LM': style(background=Color16Table.Light_Magenta),
+        'LC': style(background=Color16Table.Light_Cyan),
 
         'blink': style(option=Option.BLINK_ON),
         'ul': style(option=Option.UNDERLINE_ON)
@@ -132,7 +132,7 @@ class style(object):
     @property
     def fgcode(self):
         if self.foreground:
-            if isinstance(self.foreground, Colors16Table):
+            if isinstance(self.foreground, Color16Table):
                 return "%dm" % self.foreground.value
             else:
                 return "38;5;%dm" % self.foreground
@@ -141,7 +141,7 @@ class style(object):
     @property
     def bgcode(self):
         if self.background:
-            if isinstance(self.background, Colors16Table):
+            if isinstance(self.background, Color16Table):
                 return "%dm" % self.background.value + 10
             else:
                 return "48;5;%dm" % self.background
@@ -150,7 +150,10 @@ class style(object):
     @property
     def opcode(self):
         if self.option:
-            return ";".join(map(lambda x: str(x.value), self.option)) + "m"
+            return ";".join(map(lambda x: str(x), self.option)) + "m"
+
+
+from StringIO import StringIO
 
 
 class term:
@@ -161,10 +164,11 @@ class term:
 
     def __init__(self, handle=sys.stdout, enabled=True):
         """
-        Create a new AnsiTerminal for the file/console handle. 
+        Create a new AnsiTerminal for the file/console handle.
         The default is enable true and the handle is sys.stdout
         """
         self.output = handle
+        self.buffer = StringIO()
         self.enabled = enabled  # and handle.isatty():
 
         self._register = default_tags()
@@ -190,8 +194,8 @@ class term:
         """
         if not self.enabled: return
 
-        self.output.write(CSI)
-        self.output.write(suffix)
+        self.buffer.write(CSI)
+        self.buffer.write(suffix)
 
     def register(self, tag, style):
         self._register[tag] = style
@@ -217,6 +221,14 @@ class term:
 
     def cprint(self, string):
         stack = []
+        self.buffer = StringIO()
+
+        def nextword():
+            s = ""
+            for c in char_iter:
+                if c == " ": break;
+                s += c
+            return s
 
         def pop():
             try:
@@ -227,11 +239,7 @@ class term:
                 pass
 
         def push():
-            tag = ""
-            for tag in itokens:
-                if "" != tag.strip():
-                    break
-            next(itokens)  # consume next empty step
+            tag = nextword()
             stack.append(tag)
             peak()
 
@@ -242,19 +250,16 @@ class term:
             except KeyError as e:
                 pass
 
-        tokens = re.split(r'(\w+|[}{])', string)
-        itokens = iter(tokens)
-        for t in itokens:
-            if t == '':
-                continue
-            elif t == self.startenv:
+        char_iter = iter(string)
+        for c in char_iter:
+            if c == self.startenv:
                 push()
-            elif t == self.endenv:
+            elif c == self.endenv:
                 pop()
             else:
-                self.output.write(t)
-        else:
-            pass  #print(string)
+                self.buffer.write(c)
+
+        self.output.write(self.buffer.getvalue())
 
 
     #def printr(self, *objects, sep=' ', end='\n'):
@@ -274,14 +279,14 @@ class term:
     def scroll_page_up(self, page=1):
         """
         Command: CSI n S
-        Name:    SU 
+        Name:    SU
         Scroll whole page up by n (default 1) lines. New lines are added at the bottom. (not ANSI.SYS)
         """
         self._write_raw(page + 'S')
 
     def scroll_page_down(self, page=1):
         """
-        Command: CSI n T 
+        Command: CSI n T
         Name:    SD
         Scroll whole page down by n (default 1) lines. New lines are added at the top. (not ANSI.SYS)
         """
@@ -307,8 +312,8 @@ class term:
 
 if __name__ == '__main__':
     t = term()
-    t.register('y', style(Colors16Table.Yellow))
-    t.register('m', style(Colors16Table.Magenta))
+    t.register('y', style(Color16Table.Yellow))
+    t.register('m', style(Color16Table.Magenta))
     t.register('hc', style(252, option=Option.UNDERLINE_ON))
     t.register('hcbg', style(252, 100))
     t.register('blink', style(option=Option.BLINK_ON))
@@ -316,4 +321,4 @@ if __name__ == '__main__':
     print = t.printr
 
     print("{y abc {m hallo} welt} {blink B!} {hc abc} {hcbg adf}")
-    print()
+    print()%                                                                                                                              

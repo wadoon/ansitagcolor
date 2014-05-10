@@ -321,4 +321,4 @@ if __name__ == '__main__':
     print = t.printr
 
     print("{y abc {m hallo} welt} {blink B!} {hc abc} {hcbg adf}")
-    print()%                                                                                                                              
+    print()

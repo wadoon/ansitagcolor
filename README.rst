@@ -30,20 +30,17 @@ text can be processed with `term.cprint` or replace the `print` with `term.print
 Getting Started
 ---------------
 
-Install with pip:
-
-.. code::
+Install with pip::
 
     pip install --user ansitagcolor
 
-Run in python.
-
-.. code::
+Run in python::
 
     from __future__ import print_function
-    import ansi
+    import ansitagcolor as ansi
     t = ansi.term()
     print = t.printr
-    t.register("error", style( foreground = ansi.Color16Table.White, background = ansi.Color16Table.Red) )
+    t.register("error", style( foreground = ansi.Color16Table.White,
+                               background = ansi.Color16Table.Red) )
 
     print("{error Error Message!}")

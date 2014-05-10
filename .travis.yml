@@ -7,10 +7,8 @@ python:
   - "pypy"
 # command to install dependencies
 install:
-  - "pip install coveralls"
-  - "pip install -r requirements.txt"
+  - "pip install enum34 nose coveralls"
   - "pip install ."
-  - "pip install nose"
 
 # command to run tests
 script:

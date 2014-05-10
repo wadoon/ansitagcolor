@@ -7,7 +7,7 @@ from enum import Enum
 
 
 __author__ = "Alexander Weigl <alex953@gmail.com>"
-__version__ = "0.0.1"
+__version__ = "0.2.1"
 __date__ = "25. Jul. 2006"
 
 #region constants

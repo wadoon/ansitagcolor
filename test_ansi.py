@@ -1,6 +1,6 @@
 __author__ = 'Alexander Weigl'
 
-import ansi
+import ansitagcolor
 
 from nose import *
 from unittest import TestCase
